@@ -1,0 +1,875 @@
+<title>G-PLAN 試着デモ</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@700;900&display=swap">
+<style>
+/* Layout: 左=操作パネル（敷地→条件→駐車→表示→プラン選定→置き方の順）、右=作図キャンバス（CAD風の明るい作図面に固定。単一テーマを意図して採用） */
+:root{
+  --bg:#e9ece8; --panel:#fbfbf8; --ink:#1d2b27; --sub:#5b6964; --line:#d3d9d4;
+  --accent:#1f7a66; --accent-soft:#e0efe9; --warn:#b3261e; --warn-soft:#fbe7e4; --ok:#1f7a66;
+  --f-ui:"Noto Sans JP","Hiragino Sans","Yu Gothic UI",sans-serif;
+  --f-display:"Zen Kaku Gothic New","Noto Sans JP",sans-serif;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.55 var(--f-ui)}
+.app{display:grid;grid-template-columns:360px minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);height:100%}
+header{grid-column:1/3;display:flex;align-items:center;gap:14px;padding:10px 16px;background:var(--ink);color:#f3f5f2}
+header h1{margin:0;font:900 18px/1.2 var(--f-display);letter-spacing:.04em}
+header .tag{font-size:11px;padding:2px 8px;border-radius:99px;background:#e3a877;color:#1d2b27;font-weight:700}
+header .note{margin-left:auto;font-size:12px;color:#b9c9c3}
+.panel{overflow:auto;background:var(--panel);border-right:1px solid var(--line);padding:12px 14px 24px;display:grid;gap:16px;align-content:start}
+.sec{display:grid;gap:8px}
+.sec h2{margin:0;font:700 13px/1.4 var(--f-ui);letter-spacing:.06em;color:var(--accent);display:flex;align-items:center;gap:8px}
+.sec h2::after{content:"";flex:1;height:1px;background:var(--line)}
+.row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+label.f{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--sub)}
+input[type=number]{width:86px;padding:4px 6px;border:1px solid var(--line);border-radius:4px;font:inherit;font-variant-numeric:tabular-nums;background:#fff;color:var(--ink)}
+input[type=number].s{width:64px}
+input[type=number].xs{width:58px}
+select{padding:4px 6px;border:1px solid var(--line);border-radius:4px;font:inherit;background:#fff;color:var(--ink);max-width:220px}
+button{font:inherit;font-size:12px;padding:5px 9px;border:1px solid var(--line);border-radius:4px;background:#fff;color:var(--ink);cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.pri{background:var(--accent);color:#fff;border-color:var(--accent)}
+button.big{padding:8px 12px;font-size:13px;font-weight:700}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.seg{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{border:none;border-radius:0;border-right:1px solid var(--line);padding:6px 4px;background:#fff}
+.seg button:last-child{border-right:none}
+.seg button.on{background:var(--accent);color:#fff;font-weight:700}
+table.t{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
+table.t td{padding:3px 4px;border-bottom:1px solid var(--line);vertical-align:middle}
+table.t td.r{text-align:right}
+table.t tr.on td{background:var(--accent-soft)}
+table.t tr[data-car],table.t tr[data-ex]{cursor:pointer}
+.res{display:grid;grid-template-columns:auto 1fr auto;gap:4px 10px;font-size:12px;align-items:center;font-variant-numeric:tabular-nums}
+.res .v{text-align:right;font-weight:700}
+.pill{font-size:11px;font-weight:700;padding:1px 8px;border-radius:99px;text-align:center;min-width:44px;white-space:nowrap}
+.pill.ok{background:var(--accent-soft);color:var(--ok)}
+.pill.ng{background:var(--warn-soft);color:var(--warn)}
+.hint{font-size:11px;color:var(--sub);line-height:1.5}
+.err{font-size:12px;color:var(--warn);font-weight:700}
+.chk{display:flex;align-items:center;gap:4px;font-size:12px}
+details.how{font-size:11px;color:var(--sub);line-height:1.55}
+details.how summary{cursor:pointer;color:var(--accent);font-weight:700;list-style:none;display:inline-flex;align-items:center;gap:4px}
+details.how summary::-webkit-details-marker{display:none}
+details.how summary::before{content:"？";display:inline-grid;place-items:center;width:15px;height:15px;border-radius:50%;background:var(--accent-soft);font-size:10px}
+details.how[open] summary{margin-bottom:2px}
+.compass{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;border:1.5px solid var(--ink);font-size:10px;line-height:1;transition:transform .15s}
+.helpbtn{position:absolute;left:12px;bottom:12px;font-size:12px}
+.fits{display:grid;gap:6px}
+.fit{display:grid;grid-template-columns:56px 1fr auto;gap:10px;align-items:center;padding:8px;border:1px solid var(--line);border-radius:6px;background:#fff}
+.fit.ng{opacity:.6}
+.fit.on{border-color:var(--accent);background:var(--accent-soft)}
+.fit b{display:block;font-size:13px}
+.fit small{display:block;color:var(--sub);font-size:11px;line-height:1.45}
+.fit svg{width:56px;height:56px}
+.stale{font-size:12px;font-weight:700;color:#8a4a17;background:#fbeee2;border-radius:4px;padding:6px 8px}
+main{position:relative;min-width:0;min-height:0;overflow:hidden}
+#cv{width:100%;height:100%;display:block;touch-action:none;user-select:none;background:#f4f5f2}
+#lenEdit{position:absolute;width:96px;display:none;z-index:5;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.help{position:absolute;left:12px;bottom:12px;max-width:min(600px,calc(100% - 24px));background:rgba(251,251,248,.94);border:1px solid var(--line);border-radius:6px;padding:8px 12px;font-size:11.5px;color:var(--sub);line-height:1.6}
+.help b{color:var(--ink)}
+.status{position:absolute;right:12px;top:12px;display:grid;gap:6px;justify-items:end}
+.badge{padding:6px 12px;border-radius:6px;font-size:13px;font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.badge.ok{background:var(--accent);color:#fff}
+.badge.ng{background:var(--warn);color:#fff}
+.badge.info{background:#fff;color:var(--ink);border:1px solid var(--line)}
+@media (max-width:760px){
+  .app{grid-template-columns:1fr;grid-template-rows:auto 60vh auto;height:auto}
+  header{grid-column:1}
+  main{grid-row:2;height:60vh}
+  .panel{grid-row:3;border-right:none;border-top:1px solid var(--line)}
+  header .note{display:none}
+  .help{display:none}
+}
+</style>
+
+<div class="app">
+<header>
+  <h1>G-PLAN 土地に試着</h1><span class="tag">デモ</span>
+  <span class="note">判定は目安です。条例・地区計画などは判定しません</span>
+</header>
+
+<aside class="panel">
+  <div class="sec">
+    <h2>1. 敷地をつくる</h2>
+    <div class="seg" id="modes">
+      <button data-mode="free" class="on">自由作図</button>
+      <button data-mode="rect">長方形</button>
+      <button data-mode="coord">座標</button>
+      <button data-mode="tri">三斜</button>
+    </div>
+    <div id="modeBox"></div>
+    <table class="t" id="edges"></table>
+    <details class="how"><summary>辺の表（道路・幅員・任意後退）の使い方</summary>「道路」にチェックした辺の外側に道路を描きます。幅員は表の入力か、図面の道路の外側の線をドラッグで変更。となり合う道路は角でつながります。「任意後退」は最初は全部の辺が共通の値（灰色の文字）です。辺ごとに数字を変えると、その辺だけの値（太字）になります。</details>
+    <div class="row">
+      <span class="f">方位（北の方角）</span>
+      <span class="compass" id="nIcon" aria-hidden="true">▲</span>
+      <label class="f"><input type="number" class="s" id="nAng" value="0" step="1">°</label>
+      <button data-nrot="-15">↺ 15°</button>
+      <button data-nrot="15">↻ 15°</button>
+    </div>
+    <div class="hint" id="nText">北は画面の上です</div>
+    <details class="how"><summary>方位の使い方</summary>画面右下の方位マーク（N）をドラッグしても回せます（Shiftで15°刻み）。0°で画面の上が北、90°で画面の右が北です。</details>
+  </div>
+
+  <div class="sec">
+    <h2>2. 条件を決める</h2>
+    <div class="row">
+      <label class="f">建蔽率上限<input type="number" class="s" id="lb" value="60" step="1">%</label>
+      <label class="f">容積率上限<input type="number" class="s" id="lf" value="200" step="10">%</label>
+    </div>
+    <div class="row"><label class="f">外壁後退（隣地側）<input type="number" class="s" id="ls" value="0" step="10">mm</label></div>
+    <div class="row"><label class="f">外壁後退（道路側）<input type="number" class="s" id="lsr" value="0" step="10">mm</label></div>
+    <div class="row"><label class="f">道路後退（セットバック）<input type="number" class="s" id="lr" value="0" step="10">mm</label></div>
+    <div class="row"><label class="f">任意後退（足場・室外機など）<input type="number" class="s" id="lo" value="700" step="10">mm</label></div>
+    <details class="how"><summary>後退距離（外壁・道路・任意）の使い方</summary>0＝指定なし。道路後退は道路の辺を内側にずらし、その分を敷地面積から除きます。任意後退は法規とは別に会社ごとに確保したい空き（足場・室外機など）で、辺ごとの値は「1. 敷地をつくる」の表で変えられます。離隔の基準は、外壁後退・任意後退・民法234条の500mm（隣地側のみ）のうち最も大きい値です。</details>
+    <div class="row">
+      <button id="addEx">＋ 除外範囲を追加</button>
+      <button id="delEx">選んだ除外範囲を削除</button>
+    </div>
+    <table class="t" id="exList"></table>
+    <details class="how"><summary>除外範囲の使い方</summary>除外範囲は「ここには建てない・停めない」場所です（高低差、電柱、残したい樹木など）。建物と駐車範囲を置けなくし、有効面積から除きます（建蔽率・容積率は法的な敷地面積で計算）。図面で枠ごと動かす、角をドラッグで形を変えられます。</details>
+    <div class="res" id="areas"></div>
+  </div>
+
+  <div class="sec">
+    <h2>3. 駐車計画</h2>
+    <div class="row">
+      <select id="carType" aria-label="車の種類"></select>
+      <button id="addCar" class="pri">＋ 車を置く</button>
+    </div>
+    <div class="row">
+      <button data-crot="-90">↺ 90°</button>
+      <button data-crot="-5">↺ 5°</button>
+      <button data-crot="5">↻ 5°</button>
+      <button data-crot="90">↻ 90°</button>
+      <button id="dupCar">複製</button>
+      <button id="delCar">削除</button>
+    </div>
+    <div class="row">
+      <label class="f">駐車範囲 幅<input type="number" class="s" id="pw" value="3000" step="10"></label>
+      <label class="f">奥行<input type="number" class="s" id="pd" value="5000" step="10">mm</label>
+    </div>
+    <table class="t" id="carList"></table>
+    <details class="how"><summary>駐車計画の使い方</summary>駐車範囲の幅・奥行は選んでいる車に効きます（新しく置く車にも同じ値を使います）。ドラッグで移動、Rキーで90°回転、矢印キーで1mm移動。車の寸法はクラスごとの代表的な目安です。駐車範囲が建物などにかかると赤枠になります。</details>
+  </div>
+
+  <div class="sec">
+    <h2>4. 表示</h2>
+    <div class="row">
+      <label class="chk"><input type="checkbox" id="sh2" checked>2階</label>
+      <label class="chk"><input type="checkbox" id="shD" checked>離隔</label>
+      <label class="chk"><input type="checkbox" id="shG" checked>グリッド（1マス910mm）</label>
+    </div>
+    <div class="row">
+      <label class="f">マウスで動かすときの刻み<input type="number" class="s" id="snap" value="1" step="1">mm</label>
+      <button id="fit">全体を表示</button>
+    </div>
+    <details class="how"><summary>動かすときの刻みの使い方</summary>刻みを10にすると、ドラッグで動かす位置が10mm単位にそろいます。</details>
+  </div>
+
+  <div class="sec">
+    <h2>5. プランを選ぶ（自動選定）</h2>
+    <button id="search" class="pri big">この敷地に入るプランを探す</button>
+    <div id="stale"></div>
+    <div class="fits" id="fits"></div>
+    <details class="how"><summary>自動選定のしくみ</summary>G-PLANの登録プランから、敷地・条件・駐車範囲・除外範囲をすべて満たすものを延床面積の大きい順に並べます。向き（90°ごと・左右反転）と位置を変えて試し、境界からの余裕がいちばん大きい置き方を選びます（デモの登録プランは3つ）。</details>
+  </div>
+
+  <div class="sec">
+    <h2>6. 置き方を調整する</h2>
+    <div class="row">
+      <button data-rot="-90">↺ 90°</button>
+      <button data-rot="-1">↺ 1°</button>
+      <button data-rot="1">↻ 1°</button>
+      <button data-rot="90">↻ 90°</button>
+      <label class="f">角度<input type="number" class="s" id="ang" step="0.5" value="0">°</label>
+    </div>
+    <div class="row">
+      <button id="mir">左右反転</button>
+      <button id="home">自動選定の位置へ</button>
+      <button id="clearPlan">プランを外す</button>
+    </div>
+    <details class="how"><summary>置き方の調整の使い方</summary>プランをドラッグで移動、丸いハンドルで回転（Shiftで15°刻み）。矢印キーで1mm、Shift+矢印で10mm動きます。図面の離隔の数字をクリックすると、その辺からの距離を数値で指定でき、プランがその分だけ動きます。</details>
+    <div class="res" id="res"></div>
+  </div>
+</aside>
+
+<main id="main">
+  <svg id="cv" aria-label="敷地とプランの作図面"></svg>
+  <input type="number" id="lenEdit" step="1" aria-label="数値の入力（mm）">
+  <div class="status" id="status"></div>
+  <div class="help" id="help" hidden></div>
+  <button class="helpbtn" id="helpBtn">？ 図面の操作方法</button>
+</main>
+</div>
+
+<script>
+(() => {
+'use strict';
+// ---------- G-PLANの登録プラン（mm、原点＝外形の左上、y＝南向き） ----------
+const PLANS = [
+  // <<PLAN_A>> 公開版では、この印の間を架空のプランに差し替える（G-PLAN試着デモ_公開版を作る.ps1）
+  // 参考プランA：Gハウス実例の平面図（1/80）の寸法線から外形を概略で読み取ったもの。延床・建築面積は図面の記載値。
+  { id:'A', name:'参考プランA', sub:'Gハウス実例・2階建て', note:'図面から外形を概略で読み取り',
+    f1:[[1820,0],[4550,0],[4550,2730],[8645,2730],[8645,10465],[0,10465],[0,2275],[1820,2275]],
+    f2:[[1820,0],[4550,0],[4550,2730],[8645,2730],[8645,7280],[1820,7280],[1820,4550],[0,4550],[0,3185],[1820,3185]],
+    floor:109.31, build:77.63 },
+  // <</PLAN_A>>
+  { id:'B', name:'サンプルB', sub:'総二階・架空のプラン', note:'デモ用の架空データ',
+    f1:[[0,0],[6370,0],[6370,8190],[0,8190]],
+    f2:[[0,0],[6370,0],[6370,8190],[0,8190]],
+    floor:null, build:null },
+  { id:'C', name:'サンプルC', sub:'L字・下屋付き・架空のプラン', note:'デモ用の架空データ',
+    f1:[[0,0],[9100,0],[9100,5460],[4550,5460],[4550,9100],[0,9100]],
+    f2:[[0,0],[5460,0],[5460,5460],[0,5460]],
+    floor:null, build:null },
+];
+
+// ---------- 車（全長L×全幅W、mm）：クラスごとの代表的な寸法の目安 ----------
+// 軽自動車は規格上限（全長3,400・全幅1,480）以内、5ナンバーは小型車の規格（全長4,700・全幅1,700）以内の値
+const CARS = [
+  { id:'kei',     name:'軽自動車',           L:3395, W:1475 },
+  { id:'keitr',   name:'軽トラック',         L:3395, W:1475 },
+  { id:'compact', name:'コンパクトカー',     L:4000, W:1695 },
+  { id:'sedan',   name:'セダン',             L:4700, W:1800 },
+  { id:'wagon',   name:'ステーションワゴン', L:4800, W:1800 },
+  { id:'mv5',     name:'ミニバン（5ナンバー）', L:4695, W:1695 },
+  { id:'mvL',     name:'大型ミニバン',       L:5000, W:1850 },
+  { id:'suv',     name:'SUV',                L:4600, W:1850 },
+  { id:'suvL',    name:'大型SUV',            L:4950, W:1980 },
+  { id:'van',     name:'商用バン',           L:4695, W:1695 },
+  { id:'bike',    name:'バイク',             L:2100, W:800 },
+  { id:'cycle',   name:'自転車',             L:1900, W:600 },
+];
+
+// ---------- 幾何 ----------
+const sArea = p => { let a=0; for (let i=0;i<p.length;i++){ const [x1,y1]=p[i],[x2,y2]=p[(i+1)%p.length]; a+=x1*y2-x2*y1; } return a/2; };
+const bbox = p => { const xs=p.map(q=>q[0]), ys=p.map(q=>q[1]); return [Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)]; };
+const dist = (a,b) => Math.hypot(b[0]-a[0],b[1]-a[1]);
+function closestOnSeg(p,a,b){ const dx=b[0]-a[0],dy=b[1]-a[1],L=dx*dx+dy*dy; let t=L?((p[0]-a[0])*dx+(p[1]-a[1])*dy)/L:0; t=Math.max(0,Math.min(1,t)); const q=[a[0]+t*dx,a[1]+t*dy]; return {q,d:Math.hypot(p[0]-q[0],p[1]-q[1])}; }
+function segCross(a,b,c,d){ const o=(p,q,r)=>(q[0]-p[0])*(r[1]-p[1])-(q[1]-p[1])*(r[0]-p[0]); const d1=o(c,d,a),d2=o(c,d,b),d3=o(a,b,c),d4=o(a,b,d); return ((d1>0&&d2<0)||(d1<0&&d2>0))&&((d3>0&&d4<0)||(d3<0&&d4>0)); }
+// 建物の辺a-b と 境界の辺c-d の最短距離。p＝建物側の点、q＝境界側の点
+function segSeg(a,b,c,d){
+  if (segCross(a,b,c,d)) return {p:a,q:a,d:0,cross:true};
+  let best=null;
+  for (const [pt,s1,s2,rev] of [[a,c,d,false],[b,c,d,false],[c,a,b,true],[d,a,b,true]]){
+    const r=closestOnSeg(pt,s1,s2);
+    if (!best||r.d<best.d) best = rev ? {p:r.q,q:pt,d:r.d} : {p:pt,q:r.q,d:r.d};
+  }
+  return best;
+}
+function inPoly(pt,poly){ let c=false; for (let i=0,j=poly.length-1;i<poly.length;j=i++){ const [xi,yi]=poly[i],[xj,yj]=poly[j]; if (((yi>pt[1])!==(yj>pt[1])) && (pt[0] < (xj-xi)*(pt[1]-yi)/(yj-yi)+xi)) c=!c; } return c; }
+function polysOverlap(p,q){
+  for (let i=0;i<p.length;i++) for (let j=0;j<q.length;j++) if (segCross(p[i],p[(i+1)%p.length],q[j],q[(j+1)%q.length])) return true;
+  return p.some(v=>inPoly(v,q)) || q.some(v=>inPoly(v,p));
+}
+function polyInside(p,outer){ return p.every(v=>inPoly(v,outer)) && !p.some((v,i)=>outer.some((e,j)=>segCross(v,p[(i+1)%p.length],e,outer[(j+1)%outer.length]))); }
+const outN = (p,i) => { const a=p[i],b=p[(i+1)%p.length],dx=b[0]-a[0],dy=b[1]-a[1],L=Math.hypot(dx,dy)||1,sg=sArea(p)>0?1:-1; return [sg*dy/L,-sg*dx/L]; };
+// d：全辺共通の距離、または辺ごとの距離の配列（外向きが正、内向きが負）
+function polyOffset(p,d){
+  const n=p.length, lines=[];
+  for (let i=0;i<n;i++){ const di=Array.isArray(d)?d[i]:d, a=p[i],b=p[(i+1)%n],L=Math.hypot(b[0]-a[0],b[1]-a[1])||1,nn=outN(p,i); lines.push({a:[a[0]+nn[0]*di,a[1]+nn[1]*di],u:[(b[0]-a[0])/L,(b[1]-a[1])/L]}); }
+  return lines.map((l2,i)=>{ const l1=lines[(i-1+n)%n], cr=l1.u[0]*l2.u[1]-l1.u[1]*l2.u[0];
+    if (Math.abs(cr)<1e-9) return l2.a;
+    const t=((l2.a[0]-l1.a[0])*l2.u[1]-(l2.a[1]-l1.a[1])*l2.u[0])/cr; return [l1.a[0]+l1.u[0]*t,l1.a[1]+l1.u[1]*t]; });
+}
+function lineX(p1,p2,p3,p4){ const d=(p1[0]-p2[0])*(p3[1]-p4[1])-(p1[1]-p2[1])*(p3[0]-p4[0]); if (Math.abs(d)<1e-9) return null;
+  const t=((p1[0]-p3[0])*(p3[1]-p4[1])-(p1[1]-p3[1])*(p3[0]-p4[0]))/d; return [p1[0]+t*(p2[0]-p1[0]), p1[1]+t*(p2[1]-p1[1])]; }
+// 凸な多角形clipで subject を切り取る（Sutherland–Hodgman）。除外範囲と敷地の重なり面積に使う
+function clipConvex(subject, clip){
+  let out=subject; const sg=sArea(clip)>0?1:-1;
+  for (let i=0;i<clip.length && out.length;i++){
+    const a=clip[i], b=clip[(i+1)%clip.length], inside=p=>sg*((b[0]-a[0])*(p[1]-a[1])-(b[1]-a[1])*(p[0]-a[0]))>=0, src=out; out=[];
+    for (let j=0;j<src.length;j++){ const P=src[j], Q=src[(j+1)%src.length], pi=inside(P), qi=inside(Q);
+      if (pi) out.push(P); if (pi!==qi){ const X=lineX(P,Q,a,b); if (X) out.push(X); } }
+  }
+  return out;
+}
+const isConvex = p => { let s=0; for (let i=0;i<p.length;i++){ const a=p[i],b=p[(i+1)%p.length],c=p[(i+2)%p.length], z=(b[0]-a[0])*(c[1]-b[1])-(b[1]-a[1])*(c[0]-b[0]); if (Math.abs(z)<1e-9) continue; if (!s) s=Math.sign(z); else if (Math.sign(z)!==s) return false; } return true; };
+const triOK = (a,b,c) => a>0&&b>0&&c>0&&a+b>c&&b+c>a&&a+c>b;
+
+// ---------- 状態 ----------
+const S = {
+  mode:'free',
+  site:{ pts:[[0,0],[8000,0],[8000,13000],[0,13000]], road:[true,false,false,false], roadW:[4000,4000,4000,4000], opt:[null,null,null,null] },
+  rect:{ w:8000, d:13000 },
+  coordErr:'', tri:{ base:[8000,13000,15264], adds:[{edge:2,d1:8000,d2:13000}] }, triInfo:null, triErr:'',
+  excl:[], cars:[], plan:null, fits:null, fitSig:'', best:{}, sel:null,
+  view:{s:0.04,ox:40,oy:40}, north:0,
+};
+const el = id => document.getElementById(id);
+const num = (id,def) => { const v=parseFloat(el(id).value); return Number.isFinite(v)?v:def; };
+const fmt = v => Math.round(v).toLocaleString('ja-JP');
+const r1 = v => Math.round(v);
+const esc = s => String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const planDef = id => PLANS.find(p=>p.id===id);
+const carDef = c => CARS.find(k=>k.id===c.type);
+const buildArea = d => d.build!=null ? d.build*1e6 : Math.abs(sArea(d.f1));
+const floorArea = d => d.floor!=null ? d.floor*1e6 : Math.abs(sArea(d.f1))+Math.abs(sArea(d.f2));
+
+// 辺の数が変わっても、道路の設定を辺ごとに保つ
+function setPts(pts){
+  const n=pts.length, old=S.site;
+  if (old.road.length!==n){ old.road=Array.from({length:n},(_,i)=>i===0); old.roadW=Array(n).fill(4000); old.opt=Array(n).fill(null); }
+  old.pts=pts;
+}
+function insertAt(i,q){ const s=S.site; s.pts.splice(i+1,0,q); s.road.splice(i+1,0,s.road[i]); s.roadW.splice(i+1,0,s.roadW[i]); s.opt.splice(i+1,0,s.opt[i]); }
+function removeAt(i){ const s=S.site; s.pts.splice(i,1); s.road.splice(i,1); s.roadW.splice(i,1); s.opt.splice(i,1); }
+// 任意後退：辺ごとの値（空欄なら共通の値）
+const optFor = n => Array.from({length:n},(_,j)=>{ const v=S.site.opt[j]; return Math.max(0, v!=null ? v : num('lo',0)); });
+
+// 三斜：三角形1を3辺で作り、2つ目からは今ある辺に2辺を足して外側へつないでいく
+function buildTri(def){
+  const [a,b,c]=def.base;
+  if (!triOK(a,b,c)) return {err:'三角形1の3辺では三角形ができません'};
+  const x=(c*c-b*b+a*a)/(2*a), h=Math.sqrt(Math.max(0,c*c-x*x));
+  const pts=[[0,0],[a,0],[x,h]], tris=[[pts[0],pts[1],pts[2]]], info=[{base:a,h,area:a*h/2}];
+  for (let k=0;k<def.adds.length;k++){
+    const ad=def.adds[k], n=pts.length;
+    if (!(ad.edge>=0 && ad.edge<n)) return {err:`三角形${k+2}：辺の番号が正しくありません`};
+    const A=pts[ad.edge], B=pts[(ad.edge+1)%n], L=dist(A,B);
+    if (!triOK(L,ad.d1,ad.d2)) return {err:`三角形${k+2}：この2辺では三角形ができません`};
+    const xx=(ad.d1*ad.d1-ad.d2*ad.d2+L*L)/(2*L), hh=Math.sqrt(Math.max(0,ad.d1*ad.d1-xx*xx)), u=[(B[0]-A[0])/L,(B[1]-A[1])/L], nn=outN(pts,ad.edge);
+    const P=[A[0]+u[0]*xx+nn[0]*hh, A[1]+u[1]*xx+nn[1]*hh];
+    tris.push([A,B,P]); info.push({base:L,h:hh,area:L*hh/2}); pts.splice(ad.edge+1,0,P);
+  }
+  return {pts:pts.map(p=>p.map(r1)), tris, info};
+}
+function applyMode(){
+  if (S.mode==='rect'){ const w=r1(S.rect.w), d=r1(S.rect.d); if (w>0&&d>0) setPts([[0,0],[w,0],[w,d],[0,d]]); }
+  if (S.mode==='tri'){ const r=buildTri(S.tri); S.triErr=r.err||''; if (!r.err){ setPts(r.pts); S.triInfo=r; } }
+}
+
+// 道路後退：道路の辺だけを内側にずらした「法的な敷地」
+function effSite(){
+  const site=S.site.pts, sb=Math.max(0,num('lr',0));
+  if (!(sb>0) || !S.site.road.some(x=>x)) return site;
+  return polyOffset(site, site.map((_,i)=>S.site.road[i]?-sb:0));
+}
+// 離隔の基準：外壁後退・任意後退・民法234条の500mm（隣地側のみ）のうち最も大きい値
+function needsFor(eff){ const wall=Math.max(0,num('ls',0)), wr=Math.max(0,num('lsr',0)), op=optFor(eff.length);
+  return eff.map((_,j)=>S.site.road[j]?Math.max(wr,op[j]):Math.max(500,wall,op[j])); }
+function parkPoly(c){ const a=c.rot*Math.PI/180, ca=Math.cos(a), sa=Math.sin(a), hw=c.pw/2, hl=c.pd/2;
+  return [[-hw,-hl],[hw,-hl],[hw,hl],[-hw,hl]].map(([x,y])=>[c.x+x*ca-y*sa, c.y+x*sa+y*ca]); }
+function placeWorld(d,P,poly){
+  const b=bbox(d.f1), cx=(b[0]+b[2])/2, cy=(b[1]+b[3])/2, a=P.rot*Math.PI/180, ca=Math.cos(a), sa=Math.sin(a);
+  return poly.map(([x,y])=>{ let lx=x-cx; const ly=y-cy; if (P.mirror) lx=-lx; return [P.x+lx*ca-ly*sa, P.y+lx*sa+ly*ca]; });
+}
+// 置き方の評価：敷地内か、各辺の離隔が基準以上か、除外範囲・駐車範囲に重ならないか。score＝最も厳しい辺の余裕
+function evalPlace(d,P,ctx){
+  const f1=placeWorld(d,P,d.f1);
+  if (!f1.every(v=>inPoly(v,ctx.eff))) return {ok:false,f1,inside:false};
+  let score=Infinity, inside=true; const clr=[];
+  for (let j=0;j<ctx.eff.length;j++){ const c=ctx.eff[j], e=ctx.eff[(j+1)%ctx.eff.length]; let best=null;
+    for (let k=0;k<f1.length;k++){ const r=segSeg(f1[k],f1[(k+1)%f1.length],c,e); if (!best||r.d<best.d) best=r; }
+    if (best.cross) inside=false; clr.push(best); score=Math.min(score,best.d-ctx.needs[j]); }
+  const hitEx=ctx.excl.some(x=>polysOverlap(f1,x)), hitPk=ctx.parks.some(x=>polysOverlap(f1,x));
+  return {ok:inside&&score>=0&&!hitEx&&!hitPk, f1, clr, inside, score, hitEx, hitPk};
+}
+function ctxNow(){ const eff=effSite(); return {eff, needs:needsFor(eff), excl:S.excl.map(x=>x.pts), parks:S.cars.map(parkPoly)}; }
+
+// ---------- 計算 ----------
+function analyze(){
+  const site=S.site.pts, ctx=ctxNow(), eff=ctx.eff, siteA0=Math.abs(sArea(site)), siteA=Math.abs(sArea(eff));
+  let exA=0; S.excl.forEach(x=>{ const c=isConvex(x.pts)?clipConvex(eff,x.pts):x.pts; exA+=c.length>2?Math.abs(sArea(c)):0; });
+  const d=S.plan?planDef(S.plan.id):null, f1=d?placeWorld(d,S.plan,d.f1):null;
+  const parks=ctx.parks;
+  const carBad = S.cars.map((c,i)=>!polyInside(parks[i],eff) || (f1&&polysOverlap(parks[i],f1)) || ctx.excl.some(x=>polysOverlap(parks[i],x)) || parks.some((q,j)=>j!==i&&polysOverlap(parks[i],q)));
+  const A={site, eff, siteA0, siteA, exA, useA:Math.max(0,siteA-exA), carBad, ctx};
+  if (!d) return A;
+  const ev=evalPlace(d,S.plan,{...ctx, parks}), bA=buildArea(d), fA=floorArea(d);
+  return Object.assign(A,{ d, f1, f2:placeWorld(d,S.plan,d.f2), ev, buildA:bA, floorA:fA, bcr:bA/siteA*100, far:fA/siteA*100,
+    minC: ev.clr?Math.min(...ev.clr.map(c=>c.d)):0 });
+}
+
+// ---------- 自動選定 ----------
+const sig = () => JSON.stringify([S.site, ['lb','lf','ls','lsr','lr','lo'].map(id=>num(id,0)), S.excl.map(x=>x.pts), S.cars.map(c=>[c.x,c.y,c.rot,c.pw,c.pd])]);
+function searchFits(){
+  const ctx=ctxNow(), siteA=Math.abs(sArea(ctx.eff)), b=bbox(ctx.eff), lb=num('lb',100), lf=num('lf',1000);
+  const out=PLANS.map(d=>{
+    const bcr=buildArea(d)/siteA*100, far=floorArea(d)/siteA*100;
+    if (bcr>lb) return {d,ok:false,bcr,far,why:`建蔽率が上限を超えます（${bcr.toFixed(1)}%）`};
+    if (far>lf) return {d,ok:false,bcr,far,why:`容積率が上限を超えます（${far.toFixed(1)}%）`};
+    let best=null;
+    const tryP=P=>{ const r=evalPlace(d,P,ctx); if (r.ok && (!best||r.score>best.score)) best={P:{...P},score:r.score}; };
+    for (const rot of [0,90,180,270]) for (const mirror of [false,true])
+      for (let y=b[1];y<=b[3];y+=200) for (let x=b[0];x<=b[2];x+=200) tryP({x,y,rot,mirror});
+    if (best){ const c=best.P; for (let dy=-200;dy<=200;dy+=20) for (let dx=-200;dx<=200;dx+=20) tryP({...c,x:c.x+dx,y:c.y+dy}); }
+    return best ? {d,ok:true,bcr,far,P:best.P,score:best.score} : {d,ok:false,bcr,far,why:'この敷地と条件では入りません'};
+  });
+  out.sort((p,q)=> (q.ok-p.ok) || (floorArea(q.d)-floorArea(p.d)));
+  S.fits=out; S.fitSig=sig(); S.best={}; out.forEach(r=>{ if (r.ok) S.best[r.d.id]=r.P; });
+}
+
+// ---------- 描画 ----------
+const svg=el('cv');
+const W2S = ([x,y]) => [x*S.view.s+S.view.ox, y*S.view.s+S.view.oy];
+const S2W = ([X,Y]) => [(X-S.view.ox)/S.view.s, (Y-S.view.oy)/S.view.s];
+const pts = p => p.map(q=>W2S(q).map(v=>v.toFixed(1)).join(',')).join(' ');
+const canDragSite = () => S.mode==='free' || S.mode==='coord';
+
+function roadGeom(){
+  const site=S.site.pts, n=site.length, R=[];
+  site.forEach((a,i)=>{ if (!S.site.road[i]) return; const b=site[(i+1)%n], nn=outN(site,i), w=Math.max(0,S.site.roadW[i]);
+    R.push({i, a, b, nn, w, oa:[a[0]+nn[0]*w,a[1]+nn[1]*w], ob:[b[0]+nn[0]*w,b[1]+nn[1]*w]}); });
+  // となり合う道路は角でつなぐ（外側の線どうしの交点まで埋める）
+  const corners=[];
+  R.forEach(r=>{ const j=(r.i+1)%n, nx=R.find(q=>q.i===j); if (!nx) return;
+    const X=lineX(r.oa,r.ob,nx.oa,nx.ob); if (!X) return;
+    const v=[X[0]-r.b[0],X[1]-r.b[1]];
+    if (v[0]*(r.nn[0]+nx.nn[0])+v[1]*(r.nn[1]+nx.nn[1])>0) corners.push([r.b,r.ob,X,nx.oa]); });
+  return {R,corners};
+}
+
+// ---------- 文字の重なりを自動で避ける ----------
+// 文字は「置きたい位置」を中心に置き、ほかの文字や頂点と重なるときだけ、文字の向きに沿って→直角方向へと少しずつずらす
+const normAng = a => { a=((a%360)+360)%360; if (a>90&&a<=270) a-=180; if (a>180) a-=360; return a; };
+const textW = (s,size) => { let w=0; for (const ch of s) w += /[\x20-\x7e]/.test(ch) ? size*0.6 : size*1.0; return w; };
+function boxOf(x,y,ang,w,h){ const a=ang*Math.PI/180, ca=Math.cos(a), sa=Math.sin(a), hw=w/2+2, hh=h/2+1;
+  return [[-hw,-hh],[hw,-hh],[hw,hh],[-hw,hh]].map(([p,q])=>[x+p*ca-q*sa, y+p*sa+q*ca]); }
+function boxHit(p,q){
+  for (const poly of [p,q]) for (let i=0;i<4;i++){ const a=poly[i], b=poly[(i+1)%4], ax=[a[1]-b[1], b[0]-a[0]];
+    let p0=Infinity,p1=-Infinity,q0=Infinity,q1=-Infinity;
+    for (const v of p){ const d=v[0]*ax[0]+v[1]*ax[1]; if (d<p0) p0=d; if (d>p1) p1=d; }
+    for (const v of q){ const d=v[0]*ax[0]+v[1]*ax[1]; if (d<q0) q0=d; if (d>q1) q1=d; }
+    if (p1<q0||q1<p0) return false; }
+  return true;
+}
+function layoutLabels(labels, obstacles){
+  const placed=[...obstacles]; let out='';
+  labels.sort((a,b)=>a.pri-b.pri);
+  for (const L of labels){
+    const ang=normAng(L.ang), a=ang*Math.PI/180, u=[Math.cos(a),Math.sin(a)], v=[-u[1],u[0]], w=textW(L.text,L.size), h=L.size*1.15;
+    const st=Math.max(8,h*0.8), cand=[[0,0]];
+    for (let k=1;k<=10;k++) cand.push([k*st,0],[-k*st,0]);
+    for (let j=1;j<=3;j++) for (const s of [1,-1]) for (let k=0;k<=6;k++){ cand.push([k*st, s*j*(h+3)]); if (k) cand.push([-k*st, s*j*(h+3)]); }
+    // L.out（外向きの向き）がある文字は、まず外側だけで場所を探し、どこも重なるときだけ内側（L.alt）で探す
+    const sv = L.out ? Math.sign(v[0]*L.out[0]+v[1]*L.out[1]) : 0;
+    const tries = L.fixed ? [[L,[[0,0]]]] : L.out
+      ? [[L, cand.filter(([t,n])=>n*sv>=0)], [L.alt, cand.filter(([t,n])=>n*sv<=0)]]
+      : [[L, cand]];
+    let pick=null;
+    for (const [o,cs] of tries){ for (const [t,n] of cs){ const x=o.x+u[0]*t+v[0]*n, y=o.y+u[1]*t+v[1]*n, bx=boxOf(x,y,ang,w,h);
+      if (!placed.some(q=>boxHit(q,bx))){ pick={x,y,bx}; break; } } if (pick) break; }
+    if (!pick) pick={x:L.x, y:L.y, bx:boxOf(L.x,L.y,ang,w,h)};
+    placed.push(pick.bx);
+    if (L.leader && Math.hypot(pick.x-L.x,pick.y-L.y)>h) out+=`<line x1="${L.x.toFixed(1)}" y1="${L.y.toFixed(1)}" x2="${pick.x.toFixed(1)}" y2="${pick.y.toFixed(1)}" stroke="${L.fill}" stroke-width="0.8" stroke-dasharray="2 2" pointer-events="none"/>`;
+    out+=`<text x="${pick.x.toFixed(1)}" y="${pick.y.toFixed(1)}" transform="rotate(${ang.toFixed(2)} ${pick.x.toFixed(1)} ${pick.y.toFixed(1)})" font-size="${L.size}" font-weight="${L.weight||700}" fill="${L.fill}" text-anchor="middle" dominant-baseline="central" paint-order="stroke" stroke="${L.halo||'#ffffff'}" stroke-width="${L.haloW||4}" ${L.attr||'pointer-events="none"'}>${esc(L.text)}</text>`;
+  }
+  return out;
+}
+
+function render(){
+  const R0=svg.getBoundingClientRect(), A=analyze(), site=A.site, n=site.length, labels=[], obst=[];
+  const deg = (p,q) => Math.atan2(q[1]-p[1],q[0]-p[0])*180/Math.PI;
+  let g='<defs><pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="#fbe7e4"/><line x1="0" y1="0" x2="0" y2="8" stroke="#c9584f" stroke-width="2"/></pattern></defs>';
+  // 道路（となり合う道路は角でつながる）
+  const RG=roadGeom();
+  RG.R.forEach(r=>{ g+=`<polygon points="${pts([r.a,r.b,r.ob,r.oa])}" fill="#cdd3ce"/>`; });
+  RG.corners.forEach(q=>{ g+=`<polygon points="${pts(q)}" fill="#cdd3ce"/>`; });
+  RG.R.forEach(r=>{ const OA=W2S(r.oa), OB=W2S(r.ob), on=S.sel&&S.sel.t==='roadw'&&S.sel.i===r.i;
+    g+=`<line x1="${OA[0]}" y1="${OA[1]}" x2="${OB[0]}" y2="${OB[1]}" stroke="${on?'#1f7a66':'#8f9a95'}" stroke-width="${on?3:1.5}"/>`;
+    g+=`<line data-roadw="${r.i}" x1="${OA[0]}" y1="${OA[1]}" x2="${OB[0]}" y2="${OB[1]}" stroke="transparent" stroke-width="16" style="cursor:ns-resize"/>`;
+    const m=W2S([(r.a[0]+r.b[0])/2+r.nn[0]*r.w*.5,(r.a[1]+r.b[1])/2+r.nn[1]*r.w*.5]);
+    labels.push({x:m[0],y:m[1],ang:deg(r.a,r.b),text:`道路　幅員 ${fmt(r.w)}`,size:13,fill:'#3f4a46',halo:'#cdd3ce',pri:0,fixed:true,attr:`data-roadlabel="${r.i}" style="cursor:text"`});
+  });
+  // 敷地
+  g+=`<polygon points="${pts(site)}" fill="#ffffff"/>`;
+  // グリッド（910mm）：背景にも敷地の中にも透けて見えるよう、敷地を塗った後に半透明で重ねる
+  if (el('shG').checked){
+    const [x0,y0]=S2W([0,0]), [x1,y1]=S2W([R0.width,R0.height]), step=910;
+    if (step*S.view.s>6){
+      for (let x=Math.floor(x0/step)*step;x<=x1;x+=step){ const X=W2S([x,0])[0]; g+=`<line x1="${X.toFixed(1)}" y1="0" x2="${X.toFixed(1)}" y2="${R0.height}" stroke="#7d9a90" stroke-opacity=".22" stroke-width="1" pointer-events="none"/>`; }
+      for (let y=Math.floor(y0/step)*step;y<=y1;y+=step){ const Y=W2S([0,y])[1]; g+=`<line x1="0" y1="${Y.toFixed(1)}" x2="${R0.width}" y2="${Y.toFixed(1)}" stroke="#7d9a90" stroke-opacity=".22" stroke-width="1" pointer-events="none"/>`; }
+    }
+  }
+  // 三斜の補助線
+  if (S.mode==='tri' && S.triInfo && !S.triErr) S.triInfo.tris.forEach((t,k)=>{ const c=W2S([(t[0][0]+t[1][0]+t[2][0])/3,(t[0][1]+t[1][1]+t[2][1])/3]);
+    g+=`<polygon points="${pts(t)}" fill="none" stroke="#4a5d96" stroke-width="1.2" stroke-dasharray="5 4" pointer-events="none"/>`;
+    labels.push({x:c[0],y:c[1],ang:0,text:`△${k+1}`,size:12,fill:'#4a5d96',pri:3}); });
+  // 道路後退の部分
+  if (A.eff!==site) site.forEach((a,i)=>{ if (!S.site.road[i]) return; const j=(i+1)%n, q=[a,site[j],A.eff[j],A.eff[i]];
+    g+=`<polygon points="${pts(q)}" fill="#f3dccb" fill-opacity=".9" stroke="#b8621f" stroke-width="1.5" stroke-dasharray="6 4" pointer-events="none"/>`;
+    const m=W2S([(a[0]+site[j][0]+A.eff[i][0]+A.eff[j][0])/4,(a[1]+site[j][1]+A.eff[i][1]+A.eff[j][1])/4]);
+    labels.push({x:m[0],y:m[1],ang:deg(a,site[j]),text:'道路後退 '+fmt(num('lr',0)),size:12,fill:'#8a4a17',pri:2});
+  });
+  // 外壁後退と任意後退：辺ごとに、深いほうを先に塗って両方の帯が見えるようにする。文字は帯のまん中
+  const m2=A.eff.length, wd=A.eff.map((_,j)=>S.site.road[j]?Math.max(0,num('lsr',0)):Math.max(0,num('ls',0))), od=optFor(m2);
+  const bands=[];
+  if (wd.some(v=>v>0)){ const inner=polyOffset(A.eff, wd.map(v=>-v)); A.eff.forEach((a,j)=>{ if (wd[j]>0) bands.push({j,d:wd[j],inner,kind:'wall'}); }); }
+  if (od.some(v=>v>0)){ const inner=polyOffset(A.eff, od.map(v=>-v)); A.eff.forEach((a,j)=>{ if (od[j]>0) bands.push({j,d:od[j],inner,kind:'opt'}); }); }
+  bands.sort((p,q)=>q.d-p.d).forEach(b=>{ const j=b.j, k=(j+1)%m2, a=A.eff[j], c=A.eff[k], q=[a,c,b.inner[k],b.inner[j]], wall=b.kind==='wall';
+    g+=`<polygon points="${pts(q)}" fill="${wall?'#e2e7f3':'#e6efd6'}" fill-opacity=".85" pointer-events="none"/>`;
+    const I=W2S(b.inner[j]), K=W2S(b.inner[k]);
+    g+=`<line x1="${I[0]}" y1="${I[1]}" x2="${K[0]}" y2="${K[1]}" stroke="${wall?'#4a5d96':'#5f7f22'}" stroke-width="1.5" stroke-dasharray="${wall?'8 5':'2 4'}" stroke-linecap="round" pointer-events="none"/>`;
+    const mid=W2S([(a[0]+c[0]+b.inner[j][0]+b.inner[k][0])/4,(a[1]+c[1]+b.inner[j][1]+b.inner[k][1])/4]);
+    labels.push({x:mid[0],y:mid[1],ang:deg(a,c),text:(wall?'外壁後退 ':'任意後退 ')+fmt(b.d),size:11.5,fill:wall?'#3d4f86':'#4c6a16',pri:2});
+  });
+  // 敷地の線と辺の当たり判定
+  g+=`<polygon points="${pts(site)}" fill="none" stroke="#1d2b27" stroke-width="2" pointer-events="none"/>`;
+  site.forEach((a,i)=>{ const b=site[(i+1)%n],A1=W2S(a),B1=W2S(b);
+    if (canDragSite()) g+=`<line data-edge="${i}" x1="${A1[0]}" y1="${A1[1]}" x2="${B1[0]}" y2="${B1[1]}" stroke="transparent" stroke-width="16" style="cursor:move"/>`;
+    if (S.sel&&S.sel.t==='edge'&&S.sel.i===i) g+=`<line x1="${A1[0]}" y1="${A1[1]}" x2="${B1[0]}" y2="${B1[1]}" stroke="#1f7a66" stroke-width="4" pointer-events="none"/>`;
+  });
+  // 除外範囲
+  S.excl.forEach((x,i)=>{ const on=S.sel&&S.sel.t==='excl'&&S.sel.i===i, c=x.pts.reduce((s,p)=>[s[0]+p[0]/x.pts.length,s[1]+p[1]/x.pts.length],[0,0]), C=W2S(c);
+    g+=`<polygon data-excl="${i}" points="${pts(x.pts)}" fill="url(#hatch)" fill-opacity=".85" stroke="#b3261e" stroke-width="${on?2.5:1.5}" style="cursor:grab"/>`;
+    labels.push({x:C[0],y:C[1],ang:0,text:`除外${i+1}`,size:12,fill:'#8f1f18',pri:3});
+    if (on) x.pts.forEach((p,k)=>{ const P=W2S(p); g+=`<rect data-exv="${i}:${k}" x="${P[0]-6}" y="${P[1]-6}" width="12" height="12" fill="#ffffff" stroke="#b3261e" stroke-width="2" style="cursor:move"/>`; });
+  });
+  // 駐車範囲と車（前＝上向きで描き、回転させる）
+  S.cars.forEach((c,i)=>{
+    const t=carDef(c), C=W2S([c.x,c.y]), s=S.view.s, L=t.L*s, Wd=t.W*s, PW=c.pw*s, PD=c.pd*s, on=S.sel&&S.sel.t==='car'&&S.sel.i===i, bad=A.carBad[i];
+    const st=bad?'#b3261e':(on?'#1d2b27':'#5b6964'), small=t.W<1000, ww=Math.max(1.5,Wd*0.13), wl=Math.max(2,L*0.15);
+    g+=`<g transform="translate(${C[0].toFixed(1)} ${C[1].toFixed(1)}) rotate(${c.rot})">`;
+    g+=`<rect data-car="${i}" x="${(-PW/2).toFixed(1)}" y="${(-PD/2).toFixed(1)}" width="${PW.toFixed(1)}" height="${PD.toFixed(1)}" fill="${bad?'#fbe7e4':'#eef2f6'}" fill-opacity=".85" stroke="${bad?'#b3261e':'#6f7f9a'}" stroke-width="${on?2:1.3}" stroke-dasharray="7 4" style="cursor:grab"/>`;
+    if (!small) [[-1,-0.3],[1,-0.3],[-1,0.3],[1,0.3]].forEach(([sx,sy])=>{ g+=`<rect x="${(sx*Wd/2-ww/2).toFixed(1)}" y="${(sy*L-wl/2).toFixed(1)}" width="${ww.toFixed(1)}" height="${wl.toFixed(1)}" rx="1" fill="#2c3632" pointer-events="none"/>`; });
+    g+=`<rect data-car="${i}" x="${(-Wd/2).toFixed(1)}" y="${(-L/2).toFixed(1)}" width="${Wd.toFixed(1)}" height="${L.toFixed(1)}" rx="${(Math.min(Wd,L)*(small?0.45:0.2)).toFixed(1)}" fill="#ffffff" stroke="${st}" stroke-width="${on?2.5:1.6}" style="cursor:grab"/>`;
+    if (!small){
+      g+=`<rect x="${(-Wd*0.38).toFixed(1)}" y="${(-L*0.30).toFixed(1)}" width="${(Wd*0.76).toFixed(1)}" height="${(L*0.13).toFixed(1)}" rx="2" fill="#a9bfcf" pointer-events="none"/>`;
+      g+=`<rect x="${(-Wd*0.36).toFixed(1)}" y="${(L*0.26).toFixed(1)}" width="${(Wd*0.72).toFixed(1)}" height="${(L*0.08).toFixed(1)}" rx="2" fill="#a9bfcf" pointer-events="none"/>`;
+    }
+    g+=`<polygon points="0,${(-L/2+3).toFixed(1)} -4,${(-L/2+9).toFixed(1)} 4,${(-L/2+9).toFixed(1)}" fill="${st}" pointer-events="none"/>`;
+    g+=`</g>`;
+    if (L>40){ labels.push({x:C[0],y:C[1],ang:0,text:t.name,size:11,fill:bad?'#b3261e':'#1d2b27',pri:3,haloW:3});
+      const lp=W2S([c.x+Math.sin(c.rot*Math.PI/180)*(c.pd/2+350), c.y-Math.cos(c.rot*Math.PI/180)*(c.pd/2+350)]);
+      labels.push({x:lp[0],y:lp[1],ang:0,text:`駐車範囲 ${fmt(c.pw)}×${fmt(c.pd)}`,size:10.5,weight:400,fill:'#4f5d78',pri:3,haloW:3}); }
+  });
+  // プラン
+  if (A.d){
+    const sel=S.sel&&S.sel.t==='plan', bad=!A.ev.ok;
+    g+=`<polygon data-plan="1" points="${pts(A.f1)}" fill="#cfe6de" stroke="${bad?'#b3261e':'#1f7a66'}" stroke-width="${sel?3:2}" style="cursor:grab"/>`;
+    if (el('sh2').checked) g+=`<polygon data-plan="1" points="${pts(A.f2)}" fill="#8cc2b0" fill-opacity=".75" stroke="#1f7a66" stroke-width="1.5" style="cursor:grab"/>`;
+    const c=W2S([S.plan.x,S.plan.y]);
+    labels.push({x:c[0],y:c[1],ang:0,text:A.d.name,size:13,fill:'#1d2b27',pri:3,haloW:3});
+    const b=bbox(A.d.f1), h=(b[3]-b[1])/2, a=S.plan.rot*Math.PI/180, H=W2S([S.plan.x+Math.sin(a)*(h+1400), S.plan.y-Math.cos(a)*(h+1400)]), T=W2S([S.plan.x+Math.sin(a)*h, S.plan.y-Math.cos(a)*h]);
+    g+=`<line x1="${T[0]}" y1="${T[1]}" x2="${H[0]}" y2="${H[1]}" stroke="#1f7a66" stroke-width="1.5" stroke-dasharray="3 3" pointer-events="none"/>`;
+    g+=`<circle data-rot="1" cx="${H[0]}" cy="${H[1]}" r="9" fill="#ffffff" stroke="#1f7a66" stroke-width="2.5" style="cursor:alias"/>`;
+    obst.push(boxOf(H[0],H[1],0,18,18));
+    // 境界からの離隔：寸法線を引き、数字は線のまん中に置く
+    if (el('shD').checked && A.ev.clr) A.ev.clr.forEach((r,j)=>{
+      if (r.cross) return;
+      const P=W2S(r.p),Q=W2S(r.q), col=r.d<A.ctx.needs[j]?'#b3261e':'#b8621f';
+      const dx=Q[0]-P[0],dy=Q[1]-P[1],L=Math.hypot(dx,dy)||1,ux=-dy/L*6,uy=dx/L*6;
+      g+=`<g pointer-events="none" stroke="${col}" stroke-width="1.6"><line x1="${P[0]}" y1="${P[1]}" x2="${Q[0]}" y2="${Q[1]}"/><line x1="${P[0]-ux}" y1="${P[1]-uy}" x2="${P[0]+ux}" y2="${P[1]+uy}"/><line x1="${Q[0]-ux}" y1="${Q[1]-uy}" x2="${Q[0]+ux}" y2="${Q[1]+uy}"/></g>`;
+      labels.push({x:(P[0]+Q[0])/2,y:(P[1]+Q[1])/2,ang:deg(P,Q),text:fmt(r.d),size:12.5,fill:col,pri:1,leader:true,attr:`data-clabel="${j}" style="cursor:text"`});
+    });
+  }
+  // 辺の長さ：基本は敷地の枠の外側。外側がほかの文字と重なって見えにくいときだけ内側に置く
+  site.forEach((a,i)=>{ const b=site[(i+1)%n], nn=outN(site,i), A1=W2S(a),B1=W2S(b), mx=(A1[0]+B1[0])/2, my=(A1[1]+B1[1])/2;
+    const hot=S.sel&&((S.sel.t==='vertex'&&(S.sel.i===i||S.sel.i===(i+1)%n))||(S.sel.t==='edge'&&S.sel.i===i));
+    labels.push({x:mx+nn[0]*18,y:my+nn[1]*18,out:nn,alt:{x:mx-nn[0]*18,y:my-nn[1]*18},ang:deg(A1,B1),text:fmt(dist(a,b)),size:hot?14:12.5,fill:hot?'#1f7a66':'#1d2b27',pri:0,haloW:5,attr:`data-elabel="${i}" style="cursor:text"`});
+  });
+  // 頂点（番号つき）は文字を置かない場所として扱う
+  site.forEach((p,i)=>{ const P=W2S(p); obst.push(boxOf(P[0],P[1],0,24,24)); });
+  const nx=R0.width-44, ny=R0.height-112;
+  obst.push(boxOf(nx,ny-6,0,50,64));
+  g+=layoutLabels(labels, obst);
+  // 頂点
+  site.forEach((p,i)=>{ const P=W2S(p), on=S.sel&&S.sel.t==='vertex'&&S.sel.i===i;
+    g+=`<circle ${canDragSite()?`data-vertex="${i}" style="cursor:move"`:''} cx="${P[0]}" cy="${P[1]}" r="${on?12:10.5}" fill="${on?'#1f7a66':'#ffffff'}" stroke="#1d2b27" stroke-width="2"/>`;
+    g+=`<text x="${P[0]}" y="${P[1]}" dominant-baseline="central" font-size="12" font-weight="700" text-anchor="middle" fill="${on?'#ffffff':'#1d2b27'}" pointer-events="none">${i+1}</text>`; });
+  // 方位（ドラッグで回転）・縮尺
+  g+=`<g data-north="1" style="cursor:alias" transform="rotate(${S.north} ${nx} ${ny})"><circle data-north="1" cx="${nx}" cy="${ny}" r="22" fill="#ffffff" stroke="#1d2b27" stroke-width="1.5"/><polygon data-north="1" points="${nx},${ny-17} ${nx-7},${ny+8} ${nx},${ny+3} ${nx+7},${ny+8}" fill="#1d2b27"/><text x="${nx}" y="${ny-27}" font-size="13" font-weight="700" text-anchor="middle" fill="#1d2b27" pointer-events="none">N</text></g>`;
+  const cand=[500,1000,2000,5000,10000], sl=cand.find(v=>v*S.view.s>=90)||10000, sw=sl*S.view.s, sx=16, sy=34;
+  g+=`<g pointer-events="none"><rect x="${sx}" y="${sy-6}" width="${sw}" height="6" fill="#1d2b27"/><text x="${sx+sw/2}" y="${sy-12}" font-size="11.5" text-anchor="middle" fill="#1d2b27">${fmt(sl)} mm</text>${el('shG').checked?`<text x="${sx}" y="${sy+18}" font-size="11.5" fill="#5b6964">グリッド 1マス＝910mm</text>`:''}</g>`;
+  svg.innerHTML=g;
+  status(A);
+}
+
+function status(A){
+  let h='';
+  if (A.d){
+    const ok=A.ev.ok && A.bcr<=num('lb',100) && A.far<=num('lf',1000);
+    if (!A.ev.inside) h+='<div class="badge ng">敷地からはみ出しています</div>';
+    if (A.ev.hitEx) h+='<div class="badge ng">除外範囲にかかっています</div>';
+    if (A.ev.hitPk) h+='<div class="badge ng">駐車範囲にかかっています</div>';
+    h+=`<div class="badge ${ok?'ok':'ng'}">${ok?'この土地に入ります':'条件を満たしていません'}</div>`;
+  } else h+='<div class="badge info">敷地と条件を決めたら「この敷地に入るプランを探す」</div>';
+  if (A.carBad.some(Boolean)) h+='<div class="badge ng">駐車範囲が建物などにかかっています</div>';
+  el('status').innerHTML=h;
+}
+
+// ---------- パネル ----------
+const typing = box => box.contains(document.activeElement) && /INPUT|SELECT/.test(document.activeElement.tagName);
+// 描き直しても「使い方」の開閉を保つ
+const howOpen=new Set();
+const how = (key,title,text) => `<details class="how" data-how="${key}" ${howOpen.has(key)?'open':''}><summary>${title}</summary>${text}</details>`;
+document.addEventListener('toggle',e=>{ const k=e.target.dataset&&e.target.dataset.how; if (k){ if (e.target.open) howOpen.add(k); else howOpen.delete(k); } },true);
+function modeBox(){
+  const box=el('modeBox'); if (typing(box)) return;
+  document.querySelectorAll('#modes button').forEach(b=>b.classList.toggle('on',b.dataset.mode===S.mode));
+  const p=S.site.pts;
+  if (S.mode==='free'){
+    box.innerHTML=`<div class="row"><button id="addE" class="pri">＋ 辺を追加</button><button id="delV">選んだ頂点を削除</button></div>
+      ${how('free','自由作図の使い方','頂点や辺をドラッグで形を変え、辺の長さをクリックで1mm単位の入力。「辺を追加」は選んだ辺（なければいちばん長い辺）の真ん中に頂点を足します。辺のダブルクリックでも追加できます。')}`;
+  } else if (S.mode==='rect'){
+    box.innerHTML=`<div class="row"><label class="f">間口<input type="number" id="rw" value="${r1(S.rect.w)}" step="1"></label><label class="f">奥行<input type="number" id="rd" value="${r1(S.rect.d)}" step="1"></label><span class="hint">mm</span></div>`;
+  } else if (S.mode==='coord'){
+    box.innerHTML=`<table class="t"><tr><td>点</td><td class="r">X（mm）</td><td class="r">Y（mm）</td><td></td></tr>${p.map((q,i)=>`<tr><td>${i+1}</td><td class="r"><input type="number" class="xs" style="width:80px" data-cx="${i}" value="${r1(q[0])}"></td><td class="r"><input type="number" class="xs" style="width:80px" data-cy="${i}" value="${r1(q[1])}"></td><td>${p.length>3?`<button data-cdel="${i}" aria-label="点${i+1}を削除">×</button>`:''}</td></tr>`).join('')}</table>
+      <div class="row"><button id="cAdd">＋ 点を追加</button></div>${how('coord','座標入力の使い方','Xは右向き、Yは下向きが正です。点の順に結んで敷地を作ります。「点を追加」は最後の点と最初の点の間に足します。')}`;
+  } else {
+    const t=S.tri, info=S.triInfo;
+    let rows=`<tr><td>△1</td><td colspan="3"><div class="row"><label class="f">辺1-2<input type="number" class="xs" data-tb="0" value="${t.base[0]}"></label><label class="f">辺2-3<input type="number" class="xs" data-tb="1" value="${t.base[1]}"></label><label class="f">辺3-1<input type="number" class="xs" data-tb="2" value="${t.base[2]}"></label></div></td></tr>`;
+    t.adds.forEach((ad,k)=>{ rows+=`<tr><td>△${k+2}</td><td colspan="3"><div class="row"><label class="f">つなぐ辺<select data-te="${k}">${Array.from({length:3+k},(_,e)=>`<option value="${e}" ${e===ad.edge?'selected':''}>辺${e+1}</option>`).join('')}</select></label><label class="f">始点から<input type="number" class="xs" data-t1="${k}" value="${ad.d1}"></label><label class="f">終点から<input type="number" class="xs" data-t2="${k}" value="${ad.d2}"></label></div></td></tr>`; });
+    box.innerHTML=`<table class="t">${rows}</table>
+      <div class="row"><button id="tAdd">＋ 三角形を追加</button><button id="tDel">最後の三角形を削除</button></div>
+      ${S.triErr?`<div class="err">${esc(S.triErr)}</div>`:''}
+      ${info&&!S.triErr?`<table class="t"><tr><td>三斜求積</td><td class="r">底辺</td><td class="r">高さ</td><td class="r">面積</td></tr>${info.info.map((f,k)=>`<tr><td>△${k+1}</td><td class="r">${fmt(f.base)}</td><td class="r">${fmt(f.h)}</td><td class="r">${(f.area/1e6).toFixed(2)}㎡</td></tr>`).join('')}<tr><td>合計</td><td></td><td></td><td class="r"><b>${(info.info.reduce((s,f)=>s+f.area,0)/1e6).toFixed(2)}㎡</b></td></tr></table>`:''}
+      ${how('tri','三斜入力の使い方','三角形1を3辺の長さで作り、2つ目からは「つなぐ辺」の始点・終点からの長さを入れて外側に足します。測量図の三斜図の寸法をそのまま使えます。')}`;
+  }
+}
+function updatePanel(){
+  const site=S.site.pts, n=site.length, A=analyze();
+  modeBox();
+  const tb=el('edges');
+  if (!typing(tb)) tb.innerHTML='<tr><td>辺</td><td class="r">長さ（mm）</td><td>道路</td><td class="r">幅員</td><td class="r">任意後退</td></tr>'+site.map((a,i)=>{ const b=site[(i+1)%n], lock=!canDragSite(), ov=S.site.opt[i];
+    return `<tr><td>${i+1}（${i+1}→${(i+1)%n+1}）</td><td class="r">${lock?fmt(dist(a,b)):`<input type="number" class="s" style="width:72px" step="1" data-len="${i}" value="${r1(dist(a,b))}">`}</td><td><input type="checkbox" data-road="${i}" ${S.site.road[i]?'checked':''} aria-label="辺${i+1}を道路にする"></td><td class="r">${S.site.road[i]?`<input type="number" class="xs" step="10" data-rw="${i}" value="${r1(S.site.roadW[i])}" aria-label="辺${i+1}の道路幅員">`:''}</td><td class="r"><input type="number" class="xs" step="10" data-opt="${i}" value="${ov!=null?ov:num('lo',0)}" style="${ov!=null?'font-weight:700':'color:#7a8781'}" title="${ov!=null?'この辺だけの値':'共通の値（2. 条件を決める）'}" aria-label="辺${i+1}の任意後退"></td></tr>`; }).join('');
+  if (document.activeElement!==el('nAng')) el('nAng').value=S.north;
+  el('nIcon').style.transform=`rotate(${S.north}deg)`;
+  const dirs=['上','右上','右','右下','下','左下','左','左上'];
+  el('nText').textContent = S.north===0 ? '北は画面の上です' : `北は画面の${dirs[Math.round(S.north/45)%8]}方向です（上から右回りに${S.north}°）`;
+  // 面積
+  let a=`<span>敷地面積</span><span class="v">${(A.siteA0/1e6).toFixed(2)} ㎡</span><span></span>`;
+  if (A.eff!==site) a+=`<span>道路後退後（法的な敷地面積）</span><span class="v">${(A.siteA/1e6).toFixed(2)} ㎡</span><span></span>`;
+  if (S.excl.length) a+=`<span>除外後の有効面積</span><span class="v">${(A.useA/1e6).toFixed(2)} ㎡</span><span></span>`;
+  el('areas').innerHTML=a;
+  const ex=el('exList'); if (!typing(ex)) ex.innerHTML = S.excl.length ? '<tr><td>除外範囲</td><td class="r">面積</td></tr>'+S.excl.map((x,i)=>`<tr data-ex="${i}" class="${S.sel&&S.sel.t==='excl'&&S.sel.i===i?'on':''}"><td>除外${i+1}</td><td class="r">${(Math.abs(sArea(x.pts))/1e6).toFixed(2)}㎡</td></tr>`).join('') : '';
+  // 車
+  const sc=S.sel&&S.sel.t==='car'?S.cars[S.sel.i]:null;
+  if (sc){ if (document.activeElement!==el('pw')) el('pw').value=sc.pw; if (document.activeElement!==el('pd')) el('pd').value=sc.pd; }
+  el('carList').innerHTML = S.cars.length ? '<tr><td>車</td><td class="r">車の寸法</td><td class="r">駐車範囲</td><td></td></tr>'+S.cars.map((c,i)=>{ const t=carDef(c), on=S.sel&&S.sel.t==='car'&&S.sel.i===i;
+    return `<tr data-car="${i}" class="${on?'on':''}"><td>${i+1}. ${esc(t.name)}</td><td class="r">${fmt(t.L)}×${fmt(t.W)}</td><td class="r">${fmt(c.pw)}×${fmt(c.pd)}</td><td>${A.carBad[i]?'<span class="pill ng">かかり</span>':'<span class="pill ok">OK</span>'}</td></tr>`; }).join('') : '<tr><td class="hint">まだ車はありません</td></tr>';
+  // 自動選定
+  el('stale').innerHTML = S.fits && S.fitSig!==sig() ? '<div class="stale">敷地や条件が変わりました。もう一度「探す」を押してください。</div>' : '';
+  el('fits').innerHTML = S.fits ? S.fits.map(r=>{ const d=r.d, b=bbox(d.f1), w=b[2]-b[0], h=b[3]-b[1], k=48/Math.max(w,h), ox=(56-w*k)/2, oy=(56-h*k)/2, pp=q=>q.map(([x,y])=>`${(ox+x*k).toFixed(1)},${(oy+y*k).toFixed(1)}`).join(' ');
+    const on=S.plan&&S.plan.id===d.id;
+    return `<div class="fit ${r.ok?'':'ng'} ${on?'on':''}"><svg viewBox="0 0 56 56" aria-hidden="true"><polygon points="${pp(d.f1)}" fill="#cfe6de" stroke="#1f7a66"/><polygon points="${pp(d.f2)}" fill="#8cc2b0" stroke="#1f7a66"/></svg>
+      <span><b>${esc(d.name)}</b><small>${esc(d.sub)}／${esc(d.note)}</small><small>延床 ${(floorArea(d)/1e6).toFixed(2)}㎡／建蔽率 ${r.bcr.toFixed(1)}%／容積率 ${r.far.toFixed(1)}%</small><small>${r.ok?`入ります（いちばん厳しい辺の余裕 ${fmt(r.score)}mm）`:esc(r.why)}</small></span>
+      ${r.ok?`<button class="${on?'':'pri'}" data-place="${d.id}">${on?'配置中':'置く'}</button>`:'<span class="pill ng">入らない</span>'}</div>`; }).join('') : '';
+  // 置いたプランの判定
+  if (A.d){
+    const pill=ok=>`<span class="pill ${ok?'ok':'ng'}">${ok?'OK':'NG'}</span>`;
+    el('res').innerHTML=`<span>プラン</span><span class="v">${esc(A.d.name)}</span><span></span>
+      <span>建築面積${A.d.build!=null?'（図面値）':''}</span><span class="v">${(A.buildA/1e6).toFixed(2)} ㎡</span><span></span>
+      <span>延床面積${A.d.floor!=null?'（図面値）':''}</span><span class="v">${(A.floorA/1e6).toFixed(2)} ㎡</span><span></span>
+      <span>建蔽率</span><span class="v">${A.bcr.toFixed(2)} %</span>${pill(A.bcr<=num('lb',100))}
+      <span>容積率</span><span class="v">${A.far.toFixed(2)} %</span>${pill(A.far<=num('lf',1000))}
+      <span>最小離隔</span><span class="v">${A.ev.inside?fmt(A.minC)+' mm':'はみ出し'}</span>${pill(A.ev.ok)}`;
+    if (document.activeElement!==el('ang')) el('ang').value=+S.plan.rot.toFixed(2);
+  } else el('res').innerHTML='<span class="hint">まだプランを置いていません</span><span></span><span></span>';
+  el('help').innerHTML = canDragSite()
+    ? '<b>頂点</b>をドラッグ／<b>辺</b>をドラッグで伸び縮み／<b>辺の長さ</b>をクリックで数値入力／辺を<b>ダブルクリック</b>で頂点を追加／<b>道路の外側の線</b>をドラッグで幅員を変更／<b>離隔の数字</b>をクリックでプランの位置を数値で調整／ホイールで拡大縮小、何もない所をドラッグで画面移動'
+    : `敷地の形は左の「${S.mode==='rect'?'長方形':'三斜'}」の数値で決まります（図面上では動かせません）／<b>道路の外側の線</b>をドラッグで幅員を変更／<b>離隔の数字</b>をクリックでプランの位置を数値で調整／ホイールで拡大縮小、何もない所をドラッグで画面移動`;
+}
+function refresh(){ render(); updatePanel(); }
+
+// ---------- 操作 ----------
+function setEdgeLen(i,L){
+  const p=S.site.pts, n=p.length, a=p[i], b=p[(i+1)%n], dx=b[0]-a[0], dy=b[1]-a[1], cur=Math.hypot(dx,dy);
+  if (!(L>0)||!cur) return;
+  const ux=dx/cur, uy=dy/cur, dl=L-cur, c=p[(i+2)%n], ex=c[0]-b[0], ey=c[1]-b[1], el2=Math.hypot(ex,ey);
+  const perp = n>3 && el2>0 && Math.abs((ex*ux+ey*uy)/el2)<0.01;
+  b[0]=r1(b[0]+ux*dl); b[1]=r1(b[1]+uy*dl);
+  if (perp){ c[0]=r1(c[0]+ux*dl); c[1]=r1(c[1]+uy*dl); }
+}
+function fit(){
+  const R=svg.getBoundingClientRect(); let all=[...S.site.pts];
+  roadGeom().R.forEach(r=>{ all.push(r.oa,r.ob); });
+  if (S.plan){ const d=planDef(S.plan.id); all=all.concat(placeWorld(d,S.plan,d.f1)); }
+  const b=bbox(all), m=70, w=Math.max(b[2]-b[0],1000), h=Math.max(b[3]-b[1],1000);
+  const s=Math.min((R.width-2*m)/w,(R.height-2*m-40)/h);
+  if (!(s>0)) return;
+  S.view.s=s; S.view.ox=(R.width-w*s)/2-b[0]*s; S.view.oy=(R.height-h*s)/2-b[1]*s-10;
+}
+const snapV = v => { const s=Math.max(1,num('snap',10)); return Math.round(v/s)*s; };
+function placePlan(id){ const P=S.best[id]; if (!P) return; S.plan={id,...P}; S.sel={t:'plan'}; }
+
+let drag=null, lastEdge=null;
+svg.addEventListener('pointerdown',e=>{
+  if (e.button!==0 && e.button!==1) return;
+  hideEdit();
+  const t=e.target, R=svg.getBoundingClientRect(), m=[e.clientX-R.left,e.clientY-R.top], w=S2W(m);
+  svg.setPointerCapture(e.pointerId);
+  const ds={...(t.dataset||{})};
+  const none = ['vertex','rot','north','elabel','clabel','car','edge','roadw','roadlabel','excl','exv'].every(k=>ds[k]==null);
+  if (none && canDragSite()){ // 辺は画面上で12px以内なら拾う
+    const p=S.site.pts; let bi=-1, bd=12;
+    p.forEach((a,i)=>{ const d=closestOnSeg(m,W2S(a),W2S(p[(i+1)%p.length])).d; if (d<bd){ bd=d; bi=i; } });
+    if (bi>=0){ ds.edge=String(bi); delete ds.plan; }
+  }
+  if (e.button===1){ drag={k:'pan',m0:m,o:[S.view.ox,S.view.oy]}; return; }
+  if (ds.vertex!=null){ const i=+ds.vertex; S.sel={t:'vertex',i}; drag={k:'vertex',i,w0:w,o:[...S.site.pts[i]]}; }
+  else if (ds.rot!=null){ S.sel={t:'plan'}; drag={k:'rot'}; }
+  else if (ds.north!=null){ drag={k:'north'}; }
+  else if (ds.elabel!=null){ drag={k:'label',i:+ds.elabel,m0:m}; }
+  else if (ds.roadlabel!=null){ drag={k:'rlabel',i:+ds.roadlabel,m0:m}; }
+  else if (ds.clabel!=null){ drag={k:'clabel',i:+ds.clabel,m0:m}; }
+  else if (ds.roadw!=null){ const i=+ds.roadw; S.sel={t:'roadw',i}; drag={k:'roadw',i}; }
+  else if (ds.exv!=null){ const [i,k]=ds.exv.split(':').map(Number); S.sel={t:'excl',i}; drag={k:'exv',i,v:k,w0:w,o:[...S.excl[i].pts[k]]}; }
+  else if (ds.excl!=null){ const i=+ds.excl; S.sel={t:'excl',i}; drag={k:'excl',i,w0:w,o:S.excl[i].pts.map(p=>[...p])}; }
+  else if (ds.car!=null){ const i=+ds.car; S.sel={t:'car',i}; drag={k:'car',i,w0:w,o:[S.cars[i].x,S.cars[i].y]}; svg.style.cursor='grabbing'; }
+  else if (ds.plan!=null){ S.sel={t:'plan'}; drag={k:'plan',w0:w,o:[S.plan.x,S.plan.y]}; svg.style.cursor='grabbing'; }
+  else if (ds.edge!=null){ const i=+ds.edge, n=S.site.pts.length, now=performance.now();
+    // ダブルクリック判定：描き直しで要素が入れ替わり、ブラウザのdblclickが届かないため自前で判定する
+    if (lastEdge && lastEdge.i===i && now-lastEdge.t<450 && Math.hypot(m[0]-lastEdge.m[0],m[1]-lastEdge.m[1])<8){
+      lastEdge=null; insertVertex(i,w); drag=null; refresh(); return; }
+    lastEdge={i,t:now,m};
+    S.sel={t:'edge',i}; drag={k:'edge',i,w0:w,nn:outN(S.site.pts,i),o:[[...S.site.pts[i]],[...S.site.pts[(i+1)%n]]]}; }
+  else { S.sel=null; drag={k:'pan',m0:m,o:[S.view.ox,S.view.oy]}; }
+  refresh();
+});
+svg.addEventListener('pointermove',e=>{
+  if (!drag) return;
+  const R=svg.getBoundingClientRect(), m=[e.clientX-R.left,e.clientY-R.top], w=S2W(m);
+  if (drag.k==='pan'){ S.view.ox=drag.o[0]+m[0]-drag.m0[0]; S.view.oy=drag.o[1]+m[1]-drag.m0[1]; render(); return; }
+  if (drag.k==='label'||drag.k==='rlabel'||drag.k==='clabel') return;
+  if (drag.k==='north'){ const cx=R.width-44, cy=R.height-112; let a=Math.atan2(m[0]-cx,-(m[1]-cy))*180/Math.PI; a=e.shiftKey?Math.round(a/15)*15:Math.round(a); S.north=((a%360)+360)%360; refresh(); return; }
+  if (drag.k==='vertex'){ const p=S.site.pts[drag.i]; p[0]=snapV(drag.o[0]+w[0]-drag.w0[0]); p[1]=snapV(drag.o[1]+w[1]-drag.w0[1]); }
+  if (drag.k==='edge'){ const n=S.site.pts.length, off=snapV((w[0]-drag.w0[0])*drag.nn[0]+(w[1]-drag.w0[1])*drag.nn[1]);
+    [drag.i,(drag.i+1)%n].forEach((k,j)=>{ S.site.pts[k]=[r1(drag.o[j][0]+drag.nn[0]*off), r1(drag.o[j][1]+drag.nn[1]*off)]; }); }
+  if (drag.k==='roadw'){ const p=S.site.pts, a=p[drag.i], nn=outN(p,drag.i); S.site.roadW[drag.i]=Math.max(500, snapV((w[0]-a[0])*nn[0]+(w[1]-a[1])*nn[1])); }
+  if (drag.k==='exv'){ S.excl[drag.i].pts[drag.v]=[snapV(drag.o[0]+w[0]-drag.w0[0]), snapV(drag.o[1]+w[1]-drag.w0[1])]; }
+  if (drag.k==='excl'){ const dx=snapV(w[0]-drag.w0[0]), dy=snapV(w[1]-drag.w0[1]); S.excl[drag.i].pts=drag.o.map(p=>[p[0]+dx,p[1]+dy]); }
+  if (drag.k==='car'){ const c=S.cars[drag.i]; c.x=drag.o[0]+snapV(w[0]-drag.w0[0]); c.y=drag.o[1]+snapV(w[1]-drag.w0[1]); }
+  if (drag.k==='plan'){ S.plan.x=drag.o[0]+snapV(w[0]-drag.w0[0]); S.plan.y=drag.o[1]+snapV(w[1]-drag.w0[1]); }
+  if (drag.k==='rot'){ let a=Math.atan2(w[0]-S.plan.x, -(w[1]-S.plan.y))*180/Math.PI; a=e.shiftKey?Math.round(a/15)*15:Math.round(a); S.plan.rot=((a%360)+360)%360; }
+  if (S.mode==='coord' && (drag.k==='vertex'||drag.k==='edge')) el('modeBox').innerHTML='';
+  refresh();
+});
+const endDrag=e=>{
+  if (!drag) return;
+  if (drag.k==='label'||drag.k==='rlabel'||drag.k==='clabel'){ const R=svg.getBoundingClientRect(), m=[e.clientX-R.left,e.clientY-R.top];
+    if (Math.hypot(m[0]-drag.m0[0],m[1]-drag.m0[1])<4){ if (drag.k==='label' && canDragSite()) showEdit('len',drag.i,m); if (drag.k==='rlabel') showEdit('roadw',drag.i,m); if (drag.k==='clabel') showEdit('clr',drag.i,m); } }
+  drag=null; svg.style.cursor=''; refresh();
+};
+svg.addEventListener('pointerup',endDrag);
+svg.addEventListener('pointercancel',endDrag);
+function insertVertex(i,w){ const p=S.site.pts, q=closestOnSeg(w,p[i],p[(i+1)%p.length]).q.map(r1); insertAt(i,q); S.sel={t:'vertex',i:i+1}; }
+svg.addEventListener('wheel',e=>{
+  e.preventDefault(); const R=svg.getBoundingClientRect(), m=[e.clientX-R.left,e.clientY-R.top], w=S2W(m);
+  const k=Math.exp(-e.deltaY*0.0015), s=Math.min(2,Math.max(0.004,S.view.s*k));
+  S.view.s=s; S.view.ox=m[0]-w[0]*s; S.view.oy=m[1]-w[1]*s; render();
+},{passive:false});
+
+// 図面上での数値入力（辺の長さ・道路幅員）
+const ed=el('lenEdit'); let edT=null;
+function showEdit(kind,i,m){ const p=S.site.pts; edT={kind,i}; ed.value = kind==='len' ? r1(dist(p[i],p[(i+1)%p.length])) : kind==='clr' ? r1(analyze().ev.clr[i].d) : r1(S.site.roadW[i]);
+  ed.style.left=Math.max(4,m[0]-48)+'px'; ed.style.top=Math.max(4,m[1]-16)+'px'; ed.style.display='block'; ed.focus(); ed.select(); }
+function applyEdit(){ if (!edT) return; const v=parseFloat(ed.value); if (edT.kind==='len') setEdgeLen(edT.i,v); else if (edT.kind==='clr') setClearance(edT.i,v); else if (v>0) S.site.roadW[edT.i]=r1(v); }
+// 離隔の数値入力：その辺の境界から外壁までが入力値になるよう、プランを離隔の向きに平行移動する（回転した外形でも数回で合わせる）
+function setClearance(j,v){
+  if (!S.plan || !(v>=0)) return;
+  for (let k=0;k<4;k++){ const r=analyze().ev.clr[j]; if (!r || r.cross) return;
+    const diff=v-r.d; if (Math.abs(diff)<0.5) break;
+    let u=[r.p[0]-r.q[0], r.p[1]-r.q[1]], L=Math.hypot(u[0],u[1]);
+    if (L<1e-6){ const e=effSite(), nn=outN(e,j); u=[-nn[0],-nn[1]]; L=1; }
+    S.plan.x+=u[0]/L*diff; S.plan.y+=u[1]/L*diff; }
+}
+function hideEdit(){ ed.style.display='none'; edT=null; }
+ed.addEventListener('keydown',e=>{ if (e.key==='Enter'){ applyEdit(); hideEdit(); refresh(); } else if (e.key==='Escape'){ hideEdit(); } e.stopPropagation(); });
+ed.addEventListener('blur',()=>{ if (edT){ applyEdit(); hideEdit(); refresh(); } });
+
+// 1. 敷地
+el('modes').addEventListener('click',e=>{ const b=e.target.closest('button[data-mode]'); if (!b) return;
+  const m=b.dataset.mode;
+  if (m==='rect'){ const bb=bbox(S.site.pts); S.rect={w:bb[2]-bb[0], d:bb[3]-bb[1]}; }
+  S.mode=m; S.sel=null; el('modeBox').innerHTML=''; applyMode(); fit(); refresh(); });
+el('modeBox').addEventListener('click',e=>{ const t=e.target;
+  if (t.id==='addE'){ const p=S.site.pts, n=p.length; let i;
+    if (S.sel&&(S.sel.t==='edge'||S.sel.t==='vertex')) i=S.sel.i;
+    else { let L=-1; p.forEach((a,k)=>{ const l=dist(a,p[(k+1)%n]); if (l>L){ L=l; i=k; } }); }
+    insertAt(i,[r1((p[i][0]+p[(i+1)%n][0])/2), r1((p[i][1]+p[(i+1)%n][1])/2)]); S.sel={t:'vertex',i:i+1}; refresh(); }
+  if (t.id==='delV'){ if (!S.sel||S.sel.t!=='vertex'||S.site.pts.length<=3) return; removeAt(S.sel.i); S.sel=null; refresh(); }
+  if (t.id==='cAdd'){ const p=S.site.pts, n=p.length; insertAt(n-1,[r1((p[n-1][0]+p[0][0])/2), r1((p[n-1][1]+p[0][1])/2)]); el('modeBox').innerHTML=''; refresh(); }
+  if (t.dataset.cdel!=null){ removeAt(+t.dataset.cdel); el('modeBox').innerHTML=''; refresh(); }
+  if (t.id==='tAdd'){ const n=3+S.tri.adds.length, cur=buildTri(S.tri); let edge=n-1, L=4000;
+    if (!cur.err){ let best=-1; cur.pts.forEach((a,k)=>{ const l=dist(a,cur.pts[(k+1)%n]); if (l>best){ best=l; edge=k; } }); L=best; }
+    S.tri.adds.push({edge, d1:r1(L*0.6), d2:r1(L*0.6)}); applyMode(); el('modeBox').innerHTML=''; refresh(); }
+  if (t.id==='tDel'){ if (!S.tri.adds.length) return; S.tri.adds.pop(); applyMode(); el('modeBox').innerHTML=''; refresh(); }
+});
+el('modeBox').addEventListener('change',e=>{ const t=e.target, v=parseFloat(t.value);
+  if (t.id==='rw') S.rect.w=v; if (t.id==='rd') S.rect.d=v;
+  if (t.dataset.cx!=null && Number.isFinite(v)) S.site.pts[+t.dataset.cx][0]=r1(v);
+  if (t.dataset.cy!=null && Number.isFinite(v)) S.site.pts[+t.dataset.cy][1]=r1(v);
+  if (t.dataset.tb!=null) S.tri.base[+t.dataset.tb]=v;
+  if (t.dataset.te!=null) S.tri.adds[+t.dataset.te].edge=+t.value;
+  if (t.dataset.t1!=null) S.tri.adds[+t.dataset.t1].d1=v;
+  if (t.dataset.t2!=null) S.tri.adds[+t.dataset.t2].d2=v;
+  applyMode(); t.blur(); el('modeBox').innerHTML=''; refresh(); });
+el('edges').addEventListener('change',e=>{ const t=e.target;
+  if (t.dataset.len!=null){ setEdgeLen(+t.dataset.len,parseFloat(t.value)); }
+  if (t.dataset.road!=null){ S.site.road[+t.dataset.road]=t.checked; }
+  if (t.dataset.rw!=null){ const v=parseFloat(t.value); if (v>0) S.site.roadW[+t.dataset.rw]=r1(v); }
+  if (t.dataset.opt!=null){ const v=parseFloat(t.value); S.site.opt[+t.dataset.opt] = Number.isFinite(v)&&v>=0&&r1(v)!==r1(num('lo',0)) ? r1(v) : null; }
+  t.blur(); refresh(); });
+document.querySelectorAll('[data-nrot]').forEach(b=>b.addEventListener('click',()=>{ S.north=(((S.north+parseFloat(b.dataset.nrot))%360)+360)%360; refresh(); }));
+el('nAng').addEventListener('change',()=>{ const v=parseFloat(el('nAng').value)||0; S.north=((v%360)+360)%360; refresh(); });
+
+// 2. 条件（除外範囲）
+el('addEx').addEventListener('click',()=>{ const eff=effSite(), b=bbox(eff), cx=r1((b[0]+b[2])/2), cy=r1((b[1]+b[3])/2);
+  S.excl.push({pts:[[cx-1000,cy-1000],[cx+1000,cy-1000],[cx+1000,cy+1000],[cx-1000,cy+1000]]}); S.sel={t:'excl',i:S.excl.length-1}; refresh(); });
+el('delEx').addEventListener('click',()=>{ if (!S.sel||S.sel.t!=='excl') return; S.excl.splice(S.sel.i,1); S.sel=null; refresh(); });
+el('exList').addEventListener('click',e=>{ const tr=e.target.closest('tr[data-ex]'); if (!tr) return; S.sel={t:'excl',i:+tr.dataset.ex}; refresh(); });
+
+// 3. 駐車計画
+el('carType').innerHTML=CARS.map(c=>`<option value="${c.id}">${esc(c.name)}（${fmt(c.L)}×${fmt(c.W)}）</option>`).join('');
+const selCar = () => S.sel&&S.sel.t==='car' ? S.sel.i : (S.cars.length?S.cars.length-1:-1);
+el('addCar').addEventListener('click',()=>{
+  // 置き場所：敷地の中で、建物・除外範囲・ほかの駐車範囲に重ならない最初の場所を500mm刻みで探す（なければ敷地の左上）
+  const eff=effSite(), b=bbox(eff), type=el('carType').value, pw=Math.max(500,num('pw',3000)), pd=Math.max(500,num('pd',5000));
+  const f1=S.plan?placeWorld(planDef(S.plan.id),S.plan,planDef(S.plan.id).f1):null, others=S.cars.map(parkPoly), ex=S.excl.map(x=>x.pts);
+  let spot=null;
+  for (let y=b[1]+pd/2; y<=b[3]-pd/2 && !spot; y+=500) for (let x=b[0]+pw/2; x<=b[2]-pw/2 && !spot; x+=500){
+    const c={type,x,y,rot:0,pw,pd}, p=parkPoly(c);
+    if (polyInside(p,eff) && !(f1&&polysOverlap(p,f1)) && !others.some(o=>polysOverlap(p,o)) && !ex.some(o=>polysOverlap(p,o))) spot=c; }
+  S.cars.push(spot || {type, x:r1(b[0]+pw/2), y:r1(b[1]+pd/2), rot:0, pw, pd});
+  S.sel={t:'car',i:S.cars.length-1}; refresh(); });
+document.querySelectorAll('[data-crot]').forEach(b=>b.addEventListener('click',()=>{ const i=selCar(); if (i<0) return; const c=S.cars[i];
+  c.rot=(((c.rot+parseFloat(b.dataset.crot))%360)+360)%360; S.sel={t:'car',i}; refresh(); }));
+el('dupCar').addEventListener('click',()=>{ const i=selCar(); if (i<0) return; const c=S.cars[i]; S.cars.push({...c, x:c.x+c.pw}); S.sel={t:'car',i:S.cars.length-1}; refresh(); });
+el('delCar').addEventListener('click',()=>{ const i=selCar(); if (i<0) return; S.cars.splice(i,1); S.sel=null; refresh(); });
+el('carList').addEventListener('click',e=>{ const tr=e.target.closest('tr[data-car]'); if (!tr) return; S.sel={t:'car',i:+tr.dataset.car}; refresh(); });
+['pw','pd'].forEach(id=>el(id).addEventListener('change',()=>{ const c=S.sel&&S.sel.t==='car'?S.cars[S.sel.i]:null, v=Math.max(500,num(id,id==='pw'?3000:5000)); if (c){ c[id]=v; } refresh(); }));
+
+// 4. 表示
+el('fit').addEventListener('click',()=>{ fit(); render(); });
+['lb','lf','ls','lsr','lr','lo','sh2','shD','shG'].forEach(id=>el(id).addEventListener('input',refresh));
+el('helpBtn').addEventListener('click',()=>{ const h=el('help'); h.hidden=!h.hidden; el('helpBtn').textContent=h.hidden?'？ 図面の操作方法':'× 操作方法を閉じる'; el('helpBtn').style.bottom=h.hidden?'12px':(h.offsetHeight+20)+'px'; });
+
+// 5・6. プラン
+el('search').addEventListener('click',()=>{ el('search').textContent='探しています…'; setTimeout(()=>{ searchFits(); const top=S.fits.find(r=>r.ok); if (top) placePlan(top.d.id); else S.plan=null; el('search').textContent='この敷地に入るプランを探す'; refresh(); },20); });
+el('fits').addEventListener('click',e=>{ const b=e.target.closest('[data-place]'); if (!b) return; placePlan(b.dataset.place); refresh(); });
+document.querySelectorAll('[data-rot]').forEach(b=>b.addEventListener('click',()=>{ if (!S.plan) return; S.plan.rot=(((S.plan.rot+parseFloat(b.dataset.rot))%360)+360)%360; refresh(); }));
+el('ang').addEventListener('change',()=>{ if (!S.plan) return; const v=parseFloat(el('ang').value)||0; S.plan.rot=((v%360)+360)%360; refresh(); });
+el('mir').addEventListener('click',()=>{ if (!S.plan) return; S.plan.mirror=!S.plan.mirror; refresh(); });
+el('home').addEventListener('click',()=>{ if (!S.plan) return; placePlan(S.plan.id); refresh(); });
+el('clearPlan').addEventListener('click',()=>{ S.plan=null; S.sel=null; refresh(); });
+
+document.addEventListener('keydown',e=>{
+  if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
+  const st=e.shiftKey?10:1, mv={ArrowLeft:[-st,0],ArrowRight:[st,0],ArrowUp:[0,-st],ArrowDown:[0,st]}[e.key];
+  if (mv && S.sel){ e.preventDefault();
+    if (S.sel.t==='vertex' && canDragSite()){ const p=S.site.pts[S.sel.i]; p[0]+=mv[0]; p[1]+=mv[1]; }
+    else if (S.sel.t==='plan'){ S.plan.x+=mv[0]; S.plan.y+=mv[1]; }
+    else if (S.sel.t==='car'){ const c=S.cars[S.sel.i]; c.x+=mv[0]; c.y+=mv[1]; }
+    else if (S.sel.t==='excl'){ S.excl[S.sel.i].pts.forEach(p=>{ p[0]+=mv[0]; p[1]+=mv[1]; }); }
+    else if (S.sel.t==='edge' && canDragSite()){ const n=S.site.pts.length; [S.sel.i,(S.sel.i+1)%n].forEach(k=>{ S.site.pts[k][0]+=mv[0]; S.site.pts[k][1]+=mv[1]; }); }
+    refresh(); }
+  if (e.key==='Delete'||e.key==='Backspace'){
+    if (S.sel&&S.sel.t==='vertex'&&canDragSite()&&S.site.pts.length>3){ e.preventDefault(); removeAt(S.sel.i); S.sel=null; refresh(); }
+    else if (S.sel&&S.sel.t==='car'){ e.preventDefault(); el('delCar').click(); }
+    else if (S.sel&&S.sel.t==='excl'){ e.preventDefault(); el('delEx').click(); } }
+  if (e.key==='r'||e.key==='R'){
+    if (S.sel&&S.sel.t==='car'){ const c=S.cars[S.sel.i]; c.rot=(c.rot+(e.shiftKey?270:90))%360; refresh(); }
+    else if (S.plan){ S.plan.rot=(S.plan.rot+(e.shiftKey?270:90))%360; refresh(); } }
+});
+
+// 初回だけ、キャンバスの大きさが決まった時点で全体表示に合わせる
+let fitted=false;
+new ResizeObserver(()=>{ const R=svg.getBoundingClientRect(); if (!fitted && R.width>200 && R.height>200){ fit(); fitted=true; } refresh(); }).observe(el('main'));
+refresh();
+})();
+</script>
